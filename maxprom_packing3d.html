@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Укладка коробок в ящики — 3D</title>
+<style>
+:root{--bg:#eef0f2;--panel:#fff;--ink:#1b2430;--mut:#5d6877;--line:#d3d8de;--acc:#1d4ed8;--accink:#fff;--view:#e2e6ea;--field:#f6f7f9;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1318;--panel:#161d25;--ink:#e6ebf0;--mut:#93a0af;--line:#2a343f;--acc:#60a5fa;--accink:#0a1a3a;--view:#0b0f13;--field:#1d2630;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0e1318;--panel:#161d25;--ink:#e6ebf0;--mut:#93a0af;--line:#2a343f;--acc:#60a5fa;--accink:#0a1a3a;--view:#0b0f13;--field:#1d2630;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
+.app{display:grid;grid-template-columns:minmax(300px,380px) 1fr;min-height:100%}
+.side{padding:20px;display:flex;flex-direction:column;gap:18px;background:var(--panel);border-right:1px solid var(--line)}
+h1{font-size:21px;margin:0;letter-spacing:-.01em}
+h2{font-size:14px;margin:0 0 8px;font-weight:650}
+.hint{color:var(--mut);font-size:13px;margin:4px 0 0}
+label{display:flex;flex-direction:column;gap:3px;font-size:12.5px;color:var(--mut)}
+input[type=number],input[type=text]{width:100%;font:inherit;color:var(--ink);background:var(--field);border:1px solid var(--line);border-radius:6px;padding:7px 8px}
+input:focus-visible,button:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.card{border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:8px;display:flex;flex-direction:column;gap:8px}
+.top{display:flex;align-items:center;gap:8px}
+.clr{width:30px;height:30px;padding:0;border:1px solid var(--line);border-radius:6px;background:none;cursor:pointer;flex:none}
+.clr::-webkit-color-swatch-wrapper{padding:3px}
+.clr::-webkit-color-swatch{border:0;border-radius:4px}
+.clr::-moz-color-swatch{border:0;border-radius:4px}
+.card:hover,.card.pin{border-color:var(--acc)}
+.card.pin{box-shadow:0 0 0 1px var(--acc)}
+.leg div{cursor:pointer}.leg div.pin{font-weight:650}
+.top .nm{flex:1}
+.x{border:0;background:none;color:var(--mut);font-size:20px;line-height:1;cursor:pointer;padding:2px 6px;border-radius:4px}
+.x:hover{color:var(--ink);background:var(--field)}
+button{font:inherit;cursor:pointer}
+.primary{background:var(--acc);color:var(--accink);border:0;border-radius:8px;padding:11px 14px;font-weight:650}
+.ghost{background:none;color:var(--ink);border:1px dashed var(--line);border-radius:8px;padding:8px 12px;width:100%}
+.chk{flex-direction:row;align-items:center;gap:8px;margin-top:10px;font-size:14px;color:var(--ink)}
+.chk input{width:16px;height:16px;accent-color:var(--acc)}
+#msg:not(:empty){font-size:13px;border-left:3px solid #dc2626;background:rgba(220,38,38,.08);padding:8px 10px;border-radius:6px}
+.sum{font-size:15px}
+.sum b{font-weight:650}
+.leg{display:flex;flex-direction:column;gap:5px;margin-top:6px;font-size:14px}
+.leg div{display:flex;align-items:center;gap:8px}
+.leg i{width:12px;height:12px;border-radius:3px;flex:none;border:1px solid rgba(128,128,128,.55)}
+.view{position:sticky;top:0;height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));background:var(--view);overflow:hidden}
+#cv{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+#cv:active{cursor:grabbing}
+.tabs{position:absolute;top:12px;left:12px;right:150px;display:flex;gap:6px;flex-wrap:wrap}
+.tabs button{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-size:13px}
+.tabs button[aria-pressed=true]{background:var(--acc);color:var(--accink);border-color:var(--acc)}
+.trb{position:absolute;top:12px;right:12px;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-size:13px}
+.trb[aria-pressed=true]{background:var(--acc);color:var(--accink);border-color:var(--acc)}
+.bar{position:absolute;left:12px;right:12px;bottom:12px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:12px;font-size:13px}
+.bar input{flex:1;accent-color:var(--acc)}
+.bar span{white-space:nowrap;color:var(--mut)}
+.empty{position:absolute;inset:0;pointer-events:none;display:grid;place-items:center;color:var(--mut);padding:24px;text-align:center}
+@media (max-width:820px){.app{grid-template-columns:1fr}.view{position:relative;height:62vh;order:-1}.side{border-right:0}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="side">
+  <div><h1>Укладка коробок в ящики</h1><p class="hint">Размеры в любых одинаковых единицах (например, мм).</p></div>
+  <section>
+    <h2>Ящик (внутренние размеры)</h2>
+    <div class="g3">
+      <label>Длина<input type="number" id="cl" min="0" step="any" value="550"></label>
+      <label>Ширина<input type="number" id="cw" min="0" step="any" value="350"></label>
+      <label>Высота<input type="number" id="ch" min="0" step="any" value="290"></label>
+    </div>
+  </section>
+  <section>
+    <h2>Коробки</h2>
+    <div id="types"></div>
+    <button class="ghost" id="add" type="button">Добавить тип коробок</button>
+    <label class="chk"><input type="checkbox" id="rot" checked>Можно кантовать (класть на бок)</label>
+  </section>
+  <button class="primary" id="go" type="button">Рассчитать укладку</button>
+  <div id="msg" role="alert"></div>
+  <section id="res" hidden>
+    <h2>Результат</h2>
+    <div class="sum" id="sum"></div>
+    <div class="leg" id="leg"></div>
+  </section>
+</aside>
+<main class="view" id="view">
+  <canvas id="cv"></canvas>
+  <button class="trb" id="tr" type="button" aria-pressed="false" hidden>Прозрачность</button>
+  <div class="bar" id="bar" hidden><span id="steplbl"></span><input type="range" id="step" min="0" max="1" value="1" aria-label="Порядок укладки"></div>
+  <div class="empty" id="empty">Задайте размеры и нажмите «Рассчитать укладку»</div>
+</main>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const $=s=>document.querySelector(s), E=1e-9, SUP=0.75;
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const PALETTE=['#b98b5e','#5bb8ea','#2f5fd0','#d93636','#f4f4f0']; // картон, голубой, синий, красный, белый
+let types=[{name:'Оборудование A',l:180,w:120,h:100,n:5,color:PALETTE[0]},{name:'Оборудование B',l:250,w:150,h:90,n:5,color:PALETTE[1]},{name:'Оборудование C',l:120,w:120,h:120,n:7,color:PALETTE[2]}];
+const nextColor=()=>PALETTE.find(c=>!types.some(t=>t.color===c))||PALETTE[types.length%PALETTE.length];
+
+/* ---------- ввод ---------- */
+function renderTypes(){
+  $('#types').innerHTML=types.map((t,i)=>`<div class="card" data-card="${i}"><div class="top"><input type="color" class="clr" data-i="${i}" data-k="color" value="${t.color}" aria-label="Цвет коробок">
+  <input type="text" class="nm" data-i="${i}" data-k="name" value="${esc(t.name)}" aria-label="Название">
+  <button class="x" type="button" data-del="${i}" aria-label="Удалить тип">×</button></div>
+  <div class="g4">${['l','w','h','n'].map((k,j)=>`<label>${['Длина','Ширина','Высота','Кол-во'][j]}<input type="number" min="0" step="any" data-i="${i}" data-k="${k}" value="${t[k]}"></label>`).join('')}</div></div>`).join('');
+}
+$('#types').addEventListener('input',e=>{const i=e.target.dataset.i,k=e.target.dataset.k;if(i===undefined)return;if(k==='name'||k==='color'){types[i][k]=e.target.value;if(k==='color')recolor()}else types[i][k]=parseFloat(e.target.value)});
+$('#types').addEventListener('click',e=>{const d=e.target.dataset.del;if(d===undefined||types.length<2)return;types.splice(+d,1);hover=null;pinned.clear();renderTypes();if(result){result=null;$('#res').hidden=true;showEmpty('Типы изменились — нажмите «Рассчитать укладку»')}});
+$('#add').onclick=()=>{types.push({name:'Тип '+(types.length+1),l:100,w:100,h:100,n:10,color:nextColor()});renderTypes()};
+
+/* ---------- алгоритм укладки ---------- */
+function orients(l,w,h,rot){
+  const c=rot?[[l,w,h],[l,h,w],[w,l,h],[w,h,l],[h,l,w],[h,w,l]].map(p=>[p[0],p[2],p[1]]):[[l,h,w],[w,h,l]];
+  const seen=new Set();return c.filter(o=>{const k=o.join();if(seen.has(k))return false;seen.add(k);return true});
+}
+const cmp=(a,b)=>{for(let i=0;i<a.length;i++){if(a[i]!==b[i])return a[i]-b[i]}return 0};
+const has=(a,b)=>a.x<=b.x+E&&a.y<=b.y+E&&a.z<=b.z+E&&a.x+a.w>=b.x+b.w-E&&a.y+a.h>=b.y+b.h-E&&a.z+a.d>=b.z+b.d-E;
+
+function supported(b,x,y,z,dx,dz){
+  if(y<E)return true;let a=0;
+  for(const p of b.boxes){if(Math.abs(p.y+p.dy-y)>E)continue;
+    const ox=Math.min(x+dx,p.x+p.dx)-Math.max(x,p.x),oz=Math.min(z+dz,p.z+p.dz)-Math.max(z,p.z);
+    if(ox>0&&oz>0)a+=ox*oz}
+  return a>=SUP*dx*dz-E;
+}
+function tryPlace(b,it,mode,minDim){
+  let best=null,bs=null;
+  for(const s of b.spaces){
+    if(s.w*s.h*s.d<it.v-E)continue;
+    for(const o of it.o){
+      if(o[0]>s.w+E||o[1]>s.h+E||o[2]>s.d+E)continue;
+      if(!supported(b,s.x,s.y,s.z,o[0],o[2]))continue;
+      const sc=mode===0?[s.y,s.z,s.x,o[1]]:mode===1?[s.w*s.h*s.d-it.v,s.y,s.z,s.x]:mode===2?[s.z,s.y,s.x,o[1]]:mode===3?[s.x,s.y,s.z,o[1]]:[s.y,s.x,s.z,o[1]];
+      if(!bs||cmp(sc,bs)<0){bs=sc;best={s,o}}
+    }
+  }
+  if(!best)return false;
+  const {s,o}=best,p={x:s.x,y:s.y,z:s.z,dx:o[0],dy:o[1],dz:o[2],t:it.t};
+  b.boxes.push(p);b.vol+=it.v;
+  const ns=[];
+  for(const q of b.spaces){
+    if(p.x>=q.x+q.w-E||p.x+p.dx<=q.x+E||p.y>=q.y+q.h-E||p.y+p.dy<=q.y+E||p.z>=q.z+q.d-E||p.z+p.dz<=q.z+E){ns.push(q);continue}
+    if(p.x>q.x+E)ns.push({...q,w:p.x-q.x});
+    if(p.x+p.dx<q.x+q.w-E)ns.push({...q,x:p.x+p.dx,w:q.x+q.w-p.x-p.dx});
+    if(p.y>q.y+E)ns.push({...q,h:p.y-q.y});
+    if(p.y+p.dy<q.y+q.h-E)ns.push({...q,y:p.y+p.dy,h:q.y+q.h-p.y-p.dy});
+    if(p.z>q.z+E)ns.push({...q,d:p.z-q.z});
+    if(p.z+p.dz<q.z+q.d-E)ns.push({...q,z:p.z+p.dz,d:q.z+q.d-p.z-p.dz});
+  }
+  const f=ns.filter(q=>q.w>=minDim-E&&q.h>=minDim-E&&q.d>=minDim-E);
+  b.spaces=f.filter((q,i)=>!f.some((r,j)=>j!==i&&has(r,q)&&(!has(q,r)||j<i)));
+  return true;
+}
+function run(order,mode,C,minDim){
+  const b={spaces:[{x:0,y:0,z:0,w:C.W,h:C.H,d:C.D}],boxes:[],vol:0},left=[];
+  for(const it of order){if(!tryPlace(b,it,mode,minDim))left.push(it)}
+  return {b,left};
+}
+function solve(items,C){
+  const cv=C.W*C.H*C.D;
+  const minDim=Math.min(...items.map(i=>Math.min(i.l,i.w,i.h)));
+  const bbox=b=>{let x=0,y=0,z=0;for(const p of b.boxes){x=Math.max(x,p.x+p.dx);y=Math.max(y,p.y+p.dy);z=Math.max(z,p.z+p.dz)}return x*y*z};
+  const score=r=>[-Math.round(r.b.vol*1e4),Math.round(bbox(r.b))];
+  let best=null,bsc=null;
+  const consider=r=>{const sc=score(r);if(!bsc||cmp(sc,bsc)<0){best=r;bsc=sc}};
+  const mx=i=>Math.max(i.l,i.w,i.h),mn=i=>Math.min(i.l,i.w,i.h),face=i=>i.v/mn(i);
+  const sorts=[(a,b)=>b.v-a.v,(a,b)=>mx(b)-mx(a)||b.v-a.v,(a,b)=>face(b)-face(a)||b.v-a.v,(a,b)=>mn(b)-mn(a)||b.v-a.v];
+  for(const s of sorts){const o=[...items].sort(s);for(let m=0;m<5;m++)consider(run(o,m,C,minDim))}
+  let seed=12345;const rnd=()=>{seed=(seed+0x6D2B79F5)|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
+  const t0=performance.now();let n=0;
+  while(performance.now()-t0<(best.left.length?3500:700)&&n<200000){
+    const o=items.map(i=>[i,i.v*(0.4+1.2*rnd())]).sort((a,b)=>b[1]-a[1]).map(x=>x[0]);
+    consider(run(o,Math.floor(rnd()*5),C,minDim));n++;
+  }
+  return {b:best.b,left:best.left,cv,n};
+}
+
+/* ---------- расчёт ---------- */
+let result=null,cur=0,meshes=[],C=null,hover=null,transp=false,pinned=new Set();
+function calc(){
+  $('#msg').innerHTML='';
+  const L=parseFloat($('#cl').value),Wd=parseFloat($('#cw').value),H=parseFloat($('#ch').value);
+  if(!(L>0&&Wd>0&&H>0)){$('#msg').textContent='Укажите положительные размеры ящика.';return}
+  C={W:L,D:Wd,H:H};const rot=$('#rot').checked;
+  const items=[],bad=[];let id=0,req=0;
+  types.forEach((t,ti)=>{
+    if(!(t.l>0&&t.w>0&&t.h>0)){if(t.n>0)bad.push(`«${t.name}»: размеры должны быть больше нуля`);return}
+    const n=Math.floor(t.n)||0;if(n<=0)return;
+    req+=n;
+    const o=orients(t.l,t.w,t.h,rot).filter(o=>o[0]<=C.W+E&&o[1]<=C.H+E&&o[2]<=C.D+E);
+    if(!o.length){bad.push(`«${t.name}» (${n} шт.) не помещается в ящик${rot?'':' в стоячем положении (попробуйте разрешить кантование)'}`);return}
+    for(let k=0;k<n;k++)items.push({id:id++,t:ti,l:t.l,w:t.w,h:t.h,v:t.l*t.w*t.h,o});
+  });
+  if(!items.length){$('#msg').innerHTML=bad.map(esc).join('<br>');$('#res').hidden=true;pinned.clear();showEmpty('Нет коробок для укладки');return}
+  const btn=$('#go');btn.disabled=true;btn.textContent='Считаю…';
+  setTimeout(()=>{try{finish(items,bad,req)}finally{btn.disabled=false;btn.textContent='Рассчитать укладку'}},30);
+}
+function finish(items,bad,req){
+  result=solve(items,C);cur=0;pinned.clear();
+  const r=result,placed=r.b.boxes.length,fill=r.b.vol/r.cv*100,msgs=bad.map(esc);
+  if(r.left.length){
+    const cnt={};r.left.forEach(i=>cnt[i.t]=(cnt[i.t]||0)+1);
+    msgs.push(`<b>Не все коробки помещаются в ящик.</b> Показан вариант с наибольшим заполнением: уложено ${placed} из ${req}. Не поместилось: ${Object.keys(cnt).map(t=>`${esc(types[t].name)} — ${cnt[t]} шт.`).join(', ')}.`);
+  }
+  $('#msg').innerHTML=msgs.join('<br>');
+  $('#sum').innerHTML=`Уложено коробок: <b>${placed} из ${req}</b><br>Заполнение ящика: <b>${fill.toFixed(1)}%</b><br>Свободно: ${(100-fill).toFixed(1)}%`;
+  $('#res').hidden=false;$('#empty').hidden=true;
+  showBin(0,true);
+}
+function showEmpty(t){$('#empty').hidden=false;$('#empty').textContent=t;$('#bar').hidden=true;clearMeshes();render()}
+$('#go').onclick=calc;
+
+/* ---------- 3D ---------- */
+let renderer,scene,camera,grp,th=0.75,ph=1.0,dist=300,tY=50,ok3d=true,diag=300;
+const clampDist=d=>Math.min(diag*6,Math.max(diag*0.6,d));
+try{
+  renderer=new THREE.WebGLRenderer({canvas:$('#cv'),antialias:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
+  scene=new THREE.Scene();camera=new THREE.PerspectiveCamera(35,1,1,100000);
+  scene.add(new THREE.AmbientLight(0xffffff,0.75));
+  const dl=new THREE.DirectionalLight(0xffffff,0.55);dl.position.set(1,2,1.4);scene.add(dl);
+  grp=new THREE.Group();scene.add(grp);
+}catch(err){ok3d=false;$('#empty').textContent='Не удалось запустить WebGL в этом браузере.'}
+const cssv=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function render(){if(!ok3d)return;renderer.setClearColor(new THREE.Color(cssv('--view')||'#e2e6ea'));renderer.render(scene,camera)}
+function placeCam(){
+  if(!ok3d)return;
+  camera.position.set(dist*Math.sin(ph)*Math.sin(th),tY+dist*Math.cos(ph),dist*Math.sin(ph)*Math.cos(th));
+  camera.near=Math.max(0.5,dist*0.02);camera.far=dist*30;camera.updateProjectionMatrix();
+  camera.lookAt(0,tY,0);render();
+}
+function resize(){if(!ok3d)return;const v=$('#view');renderer.setSize(v.clientWidth,v.clientHeight,false);camera.aspect=v.clientWidth/v.clientHeight;camera.updateProjectionMatrix();placeCam()}
+new ResizeObserver(resize).observe($('#view'));
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if(result)showBin(cur,false);else render()});
+function clearMeshes(){if(!ok3d)return;while(grp.children.length){const o=grp.children.pop();o.geometry&&o.geometry.dispose()}meshes=[]}
+
+function showBin(i,resetCam){
+  cur=i;const b=result.b;
+  if(!ok3d)return;
+  clearMeshes();
+  const {W,H,D}=C;
+  const ink=new THREE.Color(cssv('--ink')||'#1b2430');
+  const crate=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(W,H,D)),new THREE.LineBasicMaterial({color:ink}));
+  crate.position.set(0,H/2,0);grp.add(crate);
+  const floor=new THREE.Mesh(new THREE.PlaneGeometry(W,D),new THREE.MeshBasicMaterial({color:ink,transparent:true,opacity:0.12,side:THREE.DoubleSide}));
+  floor.rotation.x=-Math.PI/2;floor.position.y=-0.01*H;grp.add(floor);
+  const order=[...b.boxes].sort((a,c)=>a.y-c.y||a.z-c.z||a.x-c.x);
+  order.forEach(p=>{
+    const m=new THREE.Mesh(new THREE.BoxGeometry(p.dx,p.dy,p.dz),new THREE.MeshLambertMaterial({color:new THREE.Color(types[p.t].color),transparent:true}));
+    m.position.set(p.x+p.dx/2-W/2,p.y+p.dy/2,p.z+p.dz/2-D/2);m.userData.t=p.t;
+    const e=new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry),new THREE.LineBasicMaterial({color:0x000000,transparent:true,opacity:0.5}));
+    m.add(e);grp.add(m);meshes.push(m);
+  });
+  const st=$('#step');st.max=order.length;st.value=order.length;$('#bar').hidden=false;
+  updateStep();
+  $('#tr').hidden=false;refreshLegend();
+  diag=Math.hypot(W,H,D);if(resetCam){th=0.75;ph=1.0;tY=H/2;dist=1.9*diag}dist=clampDist(dist);
+  placeCam();
+}
+function updateStep(){
+  const k=+$('#step').value;
+  $('#steplbl').textContent=`Порядок укладки: ${k} из ${meshes.length}`;applyStyle();
+}
+function applyStyle(){
+  if(!ok3d)return;
+  const k=+$('#step').value,ink=new THREE.Color(cssv('--ink')||'#1b2430');
+  meshes.forEach((m,i)=>{
+    const t=m.userData.t,hl=hover===t||pinned.has(t),mat=m.material,le=m.children[0].material;
+    const op=transp?(hl?1:0.18):1;
+    m.visible=i<k;
+    if(mat.transparent!==(op<1)){mat.transparent=op<1;mat.needsUpdate=true}
+    mat.opacity=op;mat.depthWrite=op>=1;
+    le.color.copy(transp?ink:new THREE.Color(0x000000));
+    le.opacity=transp?(hl?0.95:0.6):0.5;
+    if(hl)mat.emissive.set(types[t].color).multiplyScalar(0.4);
+    else mat.emissive.setHex(i===k-1&&k<meshes.length?0x444444:0);
+  });
+  render();
+}
+function syncPins(){document.querySelectorAll('[data-card]').forEach(el=>el.classList.toggle('pin',pinned.has(+el.dataset.card)))}
+function refreshLegend(){
+  if(!result)return;const cnt={};result.b.boxes.forEach(p=>cnt[p.t]=(cnt[p.t]||0)+1);
+  $('#leg').innerHTML=Object.keys(cnt).map(t=>`<div data-card="${t}"><i style="background:${types[t].color}"></i>${esc(types[t].name)} — ${cnt[t]} шт. (${types[t].l}×${types[t].w}×${types[t].h})</div>`).join('');syncPins();
+}
+function recolor(){meshes.forEach(m=>m.material.color.set(types[m.userData.t].color));refreshLegend();applyStyle()}
+$('#step').addEventListener('input',updateStep);
+
+/* орбитальное управление: вращение, масштаб колесом и щипком */
+(function(){
+  const cv=$('#cv'),ptr=new Map();let pd=0,sx=0,sy=0,moved=false;
+  cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);ptr.set(e.pointerId,[e.clientX,e.clientY]);if(ptr.size===1){sx=e.clientX;sy=e.clientY;moved=false}else moved=true;if(ptr.size===2){const a=[...ptr.values()];pd=Math.hypot(a[0][0]-a[1][0],a[0][1]-a[1][1])}});
+  cv.addEventListener('pointermove',e=>{
+    if(!ptr.has(e.pointerId))return;const o=ptr.get(e.pointerId);if(Math.hypot(e.clientX-sx,e.clientY-sy)>5)moved=true;
+    if(ptr.size===1){th-=(e.clientX-o[0])*0.008;ph=Math.min(Math.PI-0.05,Math.max(0.05,ph-(e.clientY-o[1])*0.008))}
+    ptr.set(e.pointerId,[e.clientX,e.clientY]);
+    if(ptr.size===2){const a=[...ptr.values()],d=Math.hypot(a[0][0]-a[1][0],a[0][1]-a[1][1]);if(pd)dist=clampDist(dist*pd/d);pd=d}
+    placeCam();
+  });
+  const up=e=>{if(e.type==='pointerup'&&ptr.size===1&&!moved&&pinned.size){pinned.clear();syncPins();applyStyle()}ptr.delete(e.pointerId);pd=0};
+  cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
+  cv.addEventListener('wheel',e=>{e.preventDefault();dist=clampDist(dist*Math.exp(Math.max(-100,Math.min(100,e.deltaY))*0.0015));placeCam()},{passive:false});
+})();
+
+$('#tr').onclick=()=>{transp=!transp;$('#tr').setAttribute('aria-pressed',transp);applyStyle()};
+const setHover=e=>{const c=e.target.closest&&e.target.closest('[data-card]');const v=c?+c.dataset.card:null;if(v!==hover){hover=v;applyStyle()}};
+$('#types').addEventListener('click',e=>{
+  if(e.target.closest('[data-del]'))return;
+  const c=e.target.closest('[data-card]');if(!c)return;const t=+c.dataset.card;
+  if(e.target.closest('input,label'))pinned.add(t);else if(pinned.has(t))pinned.delete(t);else pinned.add(t);
+  syncPins();applyStyle();
+});
+$('#leg').addEventListener('click',e=>{
+  const c=e.target.closest('[data-card]');if(!c)return;const t=+c.dataset.card;
+  if(pinned.has(t))pinned.delete(t);else pinned.add(t);syncPins();applyStyle();
+});
+['#types','#leg'].forEach(q=>{const el=$(q);el.addEventListener('mouseover',setHover);el.addEventListener('focusin',setHover);
+  el.addEventListener('mouseleave',()=>{hover=null;applyStyle()});el.addEventListener('focusout',()=>{hover=null;applyStyle()})});
+renderTypes();
+if(ok3d)calc();
+</script>
+</body>
+</html>
