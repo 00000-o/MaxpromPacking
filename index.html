@@ -19,7 +19,7 @@ h1{font-size:21px;margin:0;letter-spacing:-.01em}
 h2{font-size:14px;margin:0 0 8px;font-weight:650}
 .hint{color:var(--mut);font-size:13px;margin:4px 0 0}
 label{display:flex;flex-direction:column;gap:3px;font-size:12.5px;color:var(--mut)}
-input[type=number],input[type=text]{width:100%;font:inherit;color:var(--ink);background:var(--field);border:1px solid var(--line);border-radius:6px;padding:7px 8px}
+select,input[type=number],input[type=text]{width:100%;font:inherit;color:var(--ink);background:var(--field);border:1px solid var(--line);border-radius:6px;padding:7px 8px}
 input:focus-visible,button:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 .g3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
@@ -67,10 +67,11 @@ button{font:inherit;cursor:pointer}
   <div><h1>Укладка коробок в ящики</h1><p class="hint">Размеры в любых одинаковых единицах (например, мм).</p></div>
   <section>
     <h2>Ящик (внутренние размеры)</h2>
+    <label style="margin-bottom:8px">Тип ящика<select id="cp"></select></label>
     <div class="g3">
       <label>Длина<input type="number" id="cl" min="0" step="any" value="550"></label>
-      <label>Ширина<input type="number" id="cw" min="0" step="any" value="350"></label>
-      <label>Высота<input type="number" id="ch" min="0" step="any" value="290"></label>
+      <label>Ширина<input type="number" id="cw" min="0" step="any" value="360"></label>
+      <label>Высота<input type="number" id="ch" min="0" step="any" value="400"></label>
     </div>
   </section>
   <section>
@@ -78,6 +79,7 @@ button{font:inherit;cursor:pointer}
     <div id="types"></div>
     <button class="ghost" id="add" type="button">Добавить тип коробок</button>
     <label class="chk"><input type="checkbox" id="rot" checked>Можно кантовать (класть на бок)</label>
+    <label style="margin-top:10px">Опора снизу<select id="sup"><option value="0.75" selected>Полностью лежат</option><option value="0">Без ограничений</option></select></label>
   </section>
   <button class="primary" id="go" type="button">Рассчитать укладку</button>
   <div id="msg" role="alert"></div>
@@ -97,10 +99,12 @@ button{font:inherit;cursor:pointer}
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
-const $=s=>document.querySelector(s), E=1e-9, SUP=0.75;
+const $=s=>document.querySelector(s), E=1e-9; let SUP=0.75;
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const PALETTE=['#b98b5e','#5bb8ea','#2f5fd0','#d93636','#f4f4f0']; // картон, голубой, синий, красный, белый
-let types=[{name:'Оборудование A',l:180,w:120,h:100,n:5,color:PALETTE[0]},{name:'Оборудование B',l:250,w:150,h:90,n:5,color:PALETTE[1]},{name:'Оборудование C',l:120,w:120,h:120,n:7,color:PALETTE[2]}];
+const CRATES=[{id:'plastic-grey',name:'Ящик пластиковый, серый',l:550,w:360,h:400}];
+const BOXES=[{id:'io-e102',name:'IO E102',l:205,w:142,h:70}];
+let types=[{name:'IO E102',l:205,w:142,h:70,n:32,color:PALETTE[0],preset:'io-e102'}];
 const nextColor=()=>PALETTE.find(c=>!types.some(t=>t.color===c))||PALETTE[types.length%PALETTE.length];
 
 /* ---------- ввод ---------- */
@@ -108,11 +112,14 @@ function renderTypes(){
   $('#types').innerHTML=types.map((t,i)=>`<div class="card" data-card="${i}"><div class="top"><input type="color" class="clr" data-i="${i}" data-k="color" value="${t.color}" aria-label="Цвет коробок">
   <input type="text" class="nm" data-i="${i}" data-k="name" value="${esc(t.name)}" aria-label="Название">
   <button class="x" type="button" data-del="${i}" aria-label="Удалить тип">×</button></div>
+  <select data-i="${i}" data-k="preset" aria-label="Тип коробки">${BOXES.map(b=>`<option value="${b.id}"${t.preset===b.id?' selected':''}>${esc(b.name)} (${b.l}×${b.w}×${b.h})</option>`).join('')}<option value="custom"${t.preset==='custom'?' selected':''}>Пользовательский</option></select>
   <div class="g4">${['l','w','h','n'].map((k,j)=>`<label>${['Длина','Ширина','Высота','Кол-во'][j]}<input type="number" min="0" step="any" data-i="${i}" data-k="${k}" value="${t[k]}"></label>`).join('')}</div></div>`).join('');
 }
-$('#types').addEventListener('input',e=>{const i=e.target.dataset.i,k=e.target.dataset.k;if(i===undefined)return;if(k==='name'||k==='color'){types[i][k]=e.target.value;if(k==='color')recolor()}else types[i][k]=parseFloat(e.target.value)});
+$('#types').addEventListener('input',e=>{const i=e.target.dataset.i,k=e.target.dataset.k;if(i===undefined)return;if(k==='preset'){const b=BOXES.find(x=>x.id===e.target.value);types[i].preset=e.target.value;if(b){Object.assign(types[i],{name:b.name,l:b.l,w:b.w,h:b.h});renderTypes();syncPins()}}
+  else if(k==='name'||k==='color'){types[i][k]=e.target.value;if(k==='color')recolor()}
+  else{types[i][k]=parseFloat(e.target.value);if(k!=='n'){const t=types[i],m=BOXES.find(x=>x.l===t.l&&x.w===t.w&&x.h===t.h);t.preset=m?m.id:'custom';const sel=e.target.closest('.card').querySelector('select');if(sel)sel.value=t.preset}}});
 $('#types').addEventListener('click',e=>{const d=e.target.dataset.del;if(d===undefined||types.length<2)return;types.splice(+d,1);hover=null;pinned.clear();renderTypes();if(result){result=null;$('#res').hidden=true;showEmpty('Типы изменились — нажмите «Рассчитать укладку»')}});
-$('#add').onclick=()=>{types.push({name:'Тип '+(types.length+1),l:100,w:100,h:100,n:10,color:nextColor()});renderTypes()};
+$('#add').onclick=()=>{types.push({name:'Тип '+(types.length+1),l:100,w:100,h:100,n:10,color:nextColor(),preset:'custom'});renderTypes()};
 
 /* ---------- алгоритм укладки ---------- */
 function orients(l,w,h,rot){
@@ -213,7 +220,7 @@ function calc(){
   $('#msg').innerHTML='';
   const L=parseFloat($('#cl').value),Wd=parseFloat($('#cw').value),H=parseFloat($('#ch').value);
   if(!(L>0&&Wd>0&&H>0)){$('#msg').textContent='Укажите положительные размеры ящика.';return}
-  C={W:L,D:Wd,H:H};const rot=$('#rot').checked;
+  C={W:L,D:Wd,H:H};const rot=$('#rot').checked;SUP=parseFloat($('#sup').value);
   const items=[],bad=[];let id=0,req=0;
   types.forEach((t,ti)=>{
     if(!(t.l>0&&t.w>0&&t.h>0)){if(t.n>0)bad.push(`«${t.name}»: размеры должны быть больше нуля`);return}
@@ -342,7 +349,7 @@ const setHover=e=>{const c=e.target.closest&&e.target.closest('[data-card]');con
 $('#types').addEventListener('click',e=>{
   if(e.target.closest('[data-del]'))return;
   const c=e.target.closest('[data-card]');if(!c)return;const t=+c.dataset.card;
-  if(e.target.closest('input,label'))pinned.add(t);else if(pinned.has(t))pinned.delete(t);else pinned.add(t);
+  if(e.target.closest('input,label,select'))pinned.add(t);else if(pinned.has(t))pinned.delete(t);else pinned.add(t);
   syncPins();applyStyle();
 });
 $('#leg').addEventListener('click',e=>{
@@ -351,6 +358,11 @@ $('#leg').addEventListener('click',e=>{
 });
 ['#types','#leg'].forEach(q=>{const el=$(q);el.addEventListener('mouseover',setHover);el.addEventListener('focusin',setHover);
   el.addEventListener('mouseleave',()=>{hover=null;applyStyle()});el.addEventListener('focusout',()=>{hover=null;applyStyle()})});
+$('#cp').innerHTML=CRATES.map(c=>`<option value="${c.id}">${esc(c.name)} (${c.l}×${c.w}×${c.h})</option>`).join('')+'<option value="custom">Пользовательский</option>';
+function syncCratePreset(){const l=+$('#cl').value,w=+$('#cw').value,h=+$('#ch').value;const m=CRATES.find(c=>c.l===l&&c.w===w&&c.h===h);$('#cp').value=m?m.id:'custom'}
+$('#cp').addEventListener('change',()=>{const c=CRATES.find(c=>c.id===$('#cp').value);if(c){$('#cl').value=c.l;$('#cw').value=c.w;$('#ch').value=c.h}});
+['#cl','#cw','#ch'].forEach(q=>$(q).addEventListener('input',syncCratePreset));
+syncCratePreset();
 renderTypes();
 if(ok3d)calc();
 </script>
