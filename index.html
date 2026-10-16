@@ -89,6 +89,7 @@ button{font:inherit;cursor:pointer}
 </aside>
 <main class="view" id="view">
   <canvas id="cv"></canvas>
+  <div class="tabs" id="tabs"></div>
   <button class="trb" id="tr" type="button" aria-pressed="false" hidden>Прозрачность</button>
   <div class="bar" id="bar" hidden><span id="steplbl"></span><input type="range" id="step" min="0" max="1" value="1" aria-label="Порядок укладки"></div>
   <div class="empty" id="empty">Задайте размеры и нажмите «Рассчитать укладку»</div>
@@ -128,17 +129,22 @@ function supported(b,x,y,z,dx,dz){
     if(ox>0&&oz>0)a+=ox*oz}
   return a>=SUP*dx*dz-E;
 }
-function tryPlace(b,it,mode,minDim){
-  let best=null,bs=null;
+function tryPlace(b,it,P,minDim,rnd){
+  let best=null,bs=null,fb=null;
   for(const s of b.spaces){
     if(s.w*s.h*s.d<it.v-E)continue;
-    for(const o of it.o){
+    for(let oi=0;oi<it.o.length;oi++){
+      const o=it.o[oi];
       if(o[0]>s.w+E||o[1]>s.h+E||o[2]>s.d+E)continue;
       if(!supported(b,s.x,s.y,s.z,o[0],o[2]))continue;
-      const sc=mode===0?[s.y,s.z,s.x,o[1]]:mode===1?[s.w*s.h*s.d-it.v,s.y,s.z,s.x]:mode===2?[s.z,s.y,s.x,o[1]]:mode===3?[s.x,s.y,s.z,o[1]]:[s.y,s.x,s.z,o[1]];
+      if(P.skip&&rnd()<P.skip){if(!fb)fb={s,o};continue}
+      const pos=[s.x,s.y,s.z],c=[pos[P.pr[0]],pos[P.pr[1]],pos[P.pr[2]]];
+      const k=P.orank===0?o[1]:P.orank===1?-o[1]:P.orank===2?-o[0]:it.rk[oi];
+      const sc=P.vol?[s.w*s.h*s.d-it.v,...c,k]:P.ofirst?[k,...c]:[...c,k];
       if(!bs||cmp(sc,bs)<0){bs=sc;best={s,o}}
     }
   }
+  if(!best)best=fb;
   if(!best)return false;
   const {s,o}=best,p={x:s.x,y:s.y,z:s.z,dx:o[0],dy:o[1],dz:o[2],t:it.t};
   b.boxes.push(p);b.vol+=it.v;
@@ -156,28 +162,49 @@ function tryPlace(b,it,mode,minDim){
   b.spaces=f.filter((q,i)=>!f.some((r,j)=>j!==i&&has(r,q)&&(!has(q,r)||j<i)));
   return true;
 }
-function run(order,mode,C,minDim){
+function run(order,P,C,minDim,rnd){
   const b={spaces:[{x:0,y:0,z:0,w:C.W,h:C.H,d:C.D}],boxes:[],vol:0},left=[];
-  for(const it of order){if(!tryPlace(b,it,mode,minDim))left.push(it)}
+  if(P.orank===3)for(const it of order)it.rk=it.o.map(()=>rnd());
+  for(const it of order){if(!tryPlace(b,it,P,minDim,rnd))left.push(it)}
   return {b,left};
 }
-function solve(items,C){
-  const cv=C.W*C.H*C.D;
-  const minDim=Math.min(...items.map(i=>Math.min(i.l,i.w,i.h)));
+const PERMS=[[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]];
+// лучшая укладка одного ящика из items за limit мс
+function packBin(items,C,minDim,limit,rnd,minLast){
   const bbox=b=>{let x=0,y=0,z=0;for(const p of b.boxes){x=Math.max(x,p.x+p.dx);y=Math.max(y,p.y+p.dy);z=Math.max(z,p.z+p.dz)}return x*y*z};
   const score=r=>[-Math.round(r.b.vol*1e4),Math.round(bbox(r.b))];
   let best=null,bsc=null;
   const consider=r=>{const sc=score(r);if(!bsc||cmp(sc,bsc)<0){best=r;bsc=sc}};
   const mx=i=>Math.max(i.l,i.w,i.h),mn=i=>Math.min(i.l,i.w,i.h),face=i=>i.v/mn(i);
   const sorts=[(a,b)=>b.v-a.v,(a,b)=>mx(b)-mx(a)||b.v-a.v,(a,b)=>face(b)-face(a)||b.v-a.v,(a,b)=>mn(b)-mn(a)||b.v-a.v];
-  for(const s of sorts){const o=[...items].sort(s);for(let m=0;m<5;m++)consider(run(o,m,C,minDim))}
-  let seed=12345;const rnd=()=>{seed=(seed+0x6D2B79F5)|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
-  const t0=performance.now();let n=0;
-  while(performance.now()-t0<(best.left.length?3500:700)&&n<200000){
-    const o=items.map(i=>[i,i.v*(0.4+1.2*rnd())]).sort((a,b)=>b[1]-a[1]).map(x=>x[0]);
-    consider(run(o,Math.floor(rnd()*5),C,minDim));n++;
+  for(const s of sorts){const o=[...items].sort(s);
+    for(const pr of PERMS)for(const ofirst of [false,true])for(const orank of [0,1,2])consider(run(o,{pr,ofirst,orank,vol:false,skip:0},C,minDim,rnd));
+    for(const orank of [0,1,2])consider(run(o,{pr:PERMS[0],ofirst:false,orank,vol:true,skip:0},C,minDim,rnd));
   }
-  return {b:best.b,left:best.left,cv,n};
+  const t0=performance.now();let n=0;
+  while(n<200000){
+    const el=performance.now()-t0;
+    if(el>=limit||(best.left.length===0&&el>=minLast))break;
+    const o=items.map(i=>[i,i.v*(0.4+1.2*rnd())]).sort((a,b)=>b[1]-a[1]).map(x=>x[0]);
+    const P={pr:PERMS[Math.floor(rnd()*6)],ofirst:rnd()<0.5,orank:Math.floor(rnd()*4),vol:rnd()<0.15,skip:rnd()<0.5?0:rnd()*0.15};
+    consider(run(o,P,C,minDim,rnd));n++;
+  }
+  best.n=n;return best;
+}
+function solve(items,C,budget=3500){
+  const cv=C.W*C.H*C.D;
+  const minDim=Math.min(...items.map(i=>Math.min(i.l,i.w,i.h)));
+  let seed=12345;const rnd=()=>{seed=(seed+0x6D2B79F5)|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
+  const tStart=performance.now();
+  let rest=[...items],bins=[],iters=0;
+  while(rest.length){
+    const rv=rest.reduce((a,i)=>a+i.v,0),est=Math.max(1,Math.ceil(rv/cv-1e-9));
+    const left=Math.max(200,budget-(performance.now()-tStart));
+    const r=packBin(rest,C,minDim,left/est,rnd,300);iters+=r.n;
+    if(!r.b.boxes.length)break;
+    bins.push(r.b);rest=r.left;
+  }
+  return {bins,left:rest,cv,n:iters};
 }
 
 /* ---------- расчёт ---------- */
@@ -202,18 +229,21 @@ function calc(){
 }
 function finish(items,bad,req){
   result=solve(items,C);cur=0;pinned.clear();
-  const r=result,placed=r.b.boxes.length,fill=r.b.vol/r.cv*100,msgs=bad.map(esc);
+  const r=result,nb=r.bins.length,placed=r.bins.reduce((a,b)=>a+b.boxes.length,0),vol=r.bins.reduce((a,b)=>a+b.vol,0),fill=vol/(nb*r.cv)*100,msgs=bad.map(esc);
   if(r.left.length){
     const cnt={};r.left.forEach(i=>cnt[i.t]=(cnt[i.t]||0)+1);
-    msgs.push(`<b>Не все коробки помещаются в ящик.</b> Показан вариант с наибольшим заполнением: уложено ${placed} из ${req}. Не поместилось: ${Object.keys(cnt).map(t=>`${esc(types[t].name)} — ${cnt[t]} шт.`).join(', ')}.`);
+    msgs.push(`<b>Не удалось разместить часть коробок:</b> ${Object.keys(cnt).map(t=>`${esc(types[t].name)} — ${cnt[t]} шт.`).join(', ')}.`);
   }
+  if(nb>1)msgs.push(`<b>Все коробки не помещаются в один ящик.</b> Потребуется ящиков: ${nb} (коробок в каждом: ${r.bins.map(b=>b.boxes.length).join(', ')}). Переключайтесь между ящиками на вкладках над 3D-окном.`);
   $('#msg').innerHTML=msgs.join('<br>');
-  $('#sum').innerHTML=`Уложено коробок: <b>${placed} из ${req}</b><br>Заполнение ящика: <b>${fill.toFixed(1)}%</b><br>Свободно: ${(100-fill).toFixed(1)}%`;
+  $('#sum').innerHTML=`Уложено коробок: <b>${placed} из ${req}</b><br>Ящиков: <b>${nb}</b><br>${nb>1?'Среднее заполнение':'Заполнение ящика'}: <b>${fill.toFixed(1)}%</b>`;
+  $('#tabs').innerHTML=nb>1?r.bins.map((b,i)=>`<button type="button" data-b="${i}" aria-pressed="false">Ящик ${i+1} · заполнен на ${(b.vol/r.cv*100).toFixed(0)}%</button>`).join(''):'';
   $('#res').hidden=false;$('#empty').hidden=true;
   showBin(0,true);
 }
-function showEmpty(t){$('#empty').hidden=false;$('#empty').textContent=t;$('#bar').hidden=true;clearMeshes();render()}
+function showEmpty(t){$('#tabs').innerHTML='';$('#empty').hidden=false;$('#empty').textContent=t;$('#bar').hidden=true;clearMeshes();render()}
 $('#go').onclick=calc;
+$('#tabs').addEventListener('click',e=>{const b=e.target.dataset.b;if(b!==undefined)showBin(+b,false)});
 
 /* ---------- 3D ---------- */
 let renderer,scene,camera,grp,th=0.75,ph=1.0,dist=300,tY=50,ok3d=true,diag=300;
@@ -240,7 +270,8 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if(res
 function clearMeshes(){if(!ok3d)return;while(grp.children.length){const o=grp.children.pop();o.geometry&&o.geometry.dispose()}meshes=[]}
 
 function showBin(i,resetCam){
-  cur=i;const b=result.b;
+  cur=i;const b=result.bins[i];
+  [...$('#tabs').children].forEach((el,k)=>el.setAttribute('aria-pressed',k===i));
   if(!ok3d)return;
   clearMeshes();
   const {W,H,D}=C;
@@ -284,7 +315,7 @@ function applyStyle(){
 }
 function syncPins(){document.querySelectorAll('[data-card]').forEach(el=>el.classList.toggle('pin',pinned.has(+el.dataset.card)))}
 function refreshLegend(){
-  if(!result)return;const cnt={};result.b.boxes.forEach(p=>cnt[p.t]=(cnt[p.t]||0)+1);
+  if(!result)return;const cnt={};result.bins[cur].boxes.forEach(p=>cnt[p.t]=(cnt[p.t]||0)+1);
   $('#leg').innerHTML=Object.keys(cnt).map(t=>`<div data-card="${t}"><i style="background:${types[t].color}"></i>${esc(types[t].name)} — ${cnt[t]} шт. (${types[t].l}×${types[t].w}×${types[t].h})</div>`).join('');syncPins();
 }
 function recolor(){meshes.forEach(m=>m.material.color.set(types[m.userData.t].color));refreshLegend();applyStyle()}
