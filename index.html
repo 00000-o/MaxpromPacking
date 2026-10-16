@@ -104,7 +104,7 @@ const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',
 const PALETTE=['#b98b5e','#5bb8ea','#2f5fd0','#d93636','#f4f4f0']; // картон, голубой, синий, красный, белый
 const CRATES=[{id:'plastic-grey',name:'Ящик пластиковый, серый',l:550,w:360,h:400}];
 const BOXES=[{id:'io-e102',name:'IO E102',l:205,w:142,h:70}];
-let types=[{name:'IO E102',l:205,w:142,h:70,n:32,color:PALETTE[0],preset:'io-e102'}];
+let types=[{name:'IO E102',l:205,w:142,h:70,n:30,color:PALETTE[0],preset:'io-e102'}];
 const nextColor=()=>PALETTE.find(c=>!types.some(t=>t.color===c))||PALETTE[types.length%PALETTE.length];
 
 /* ---------- ввод ---------- */
