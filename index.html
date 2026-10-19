@@ -11,6 +11,15 @@ box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:en
 :root[data-theme="dark"]{--bg:#0e1318;--panel:#161d25;--ink:#e6ebf0;--mut:#93a0af;--line:#2a343f;--acc:#60a5fa;--accink:#0a1a3a;--view:#0b0f13;--field:#1d2630;color-scheme:dark}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
 *,*::before,*::after{box-sizing:border-box}
+.seg{display:flex;gap:4px;background:var(--field);border:1px solid var(--line);border-radius:8px;padding:3px}
+.seg button{flex:1;border:0;background:none;color:var(--ink);padding:7px;border-radius:6px;font-weight:600}
+.seg button[aria-pressed=true]{background:var(--acc);color:var(--accink)}
+.dl{display:flex;flex-direction:column;gap:6px}
+.lay{text-align:left;background:var(--field);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:2px}
+.lay small{color:var(--mut)}
+.lay[aria-pressed=true]{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc)}
+.rec{font-size:11px;background:var(--acc);color:var(--accink);border-radius:999px;padding:1px 8px;align-self:flex-start}
+.dd{font-size:13px;margin-top:10px;line-height:1.55}
 [hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
 .app{display:grid;grid-template-columns:minmax(300px,380px) 1fr;min-height:100%}
@@ -65,6 +74,7 @@ button{font:inherit;cursor:pointer}
 <div class="app">
 <aside class="side">
   <div><h1>Укладка коробок в ящики</h1><p class="hint">Размеры в любых одинаковых единицах (например, мм).</p></div>
+  <div class="seg"><button type="button" id="mp" aria-pressed="true">Укладка</button><button type="button" id="md" aria-pressed="false">Разделители</button></div>
   <section>
     <h2>Ящик (внутренние размеры)</h2>
     <label style="margin-bottom:8px">Тип ящика<select id="cp"></select></label>
@@ -81,8 +91,11 @@ button{font:inherit;cursor:pointer}
     <label class="chk"><input type="checkbox" id="rot" checked>Можно кантовать (класть на бок)</label>
     <label style="margin-top:10px">Опора снизу<select id="sup"><option value="0.75" selected>Полностью лежат</option><option value="0">Без ограничений</option></select></label>
   </section>
+  <section id="dopts" hidden><h2>Разделители LM</h2><label>Толщина разделителя, мм<input type="number" id="dt" min="0" step="any" value="10"></label>
+    <p class="hint">Схемы LM для ящика 600×400 (внутри 560×360). Разделители стоят в пазах на равных расстояниях и всегда идут на полную длину и высоту.</p></section>
   <button class="primary" id="go" type="button">Рассчитать укладку</button>
   <div id="msg" role="alert"></div>
+  <section id="dres" hidden><h2>Схемы разделителей</h2><div class="dl" id="dl"></div><div class="dd" id="dd"></div></section>
   <section id="res" hidden>
     <h2>Результат</h2>
     <div class="sum" id="sum"></div>
@@ -118,7 +131,7 @@ function renderTypes(){
 $('#types').addEventListener('input',e=>{const i=e.target.dataset.i,k=e.target.dataset.k;if(i===undefined)return;if(k==='preset'){const b=BOXES.find(x=>x.id===e.target.value);types[i].preset=e.target.value;if(b){Object.assign(types[i],{name:b.name,l:b.l,w:b.w,h:b.h});renderTypes();syncPins()}}
   else if(k==='name'||k==='color'){types[i][k]=e.target.value;if(k==='color')recolor()}
   else{types[i][k]=parseFloat(e.target.value);if(k!=='n'){const t=types[i],m=BOXES.find(x=>x.l===t.l&&x.w===t.w&&x.h===t.h);t.preset=m?m.id:'custom';const sel=e.target.closest('.card').querySelector('select');if(sel)sel.value=t.preset}}});
-$('#types').addEventListener('click',e=>{const d=e.target.dataset.del;if(d===undefined||types.length<2)return;types.splice(+d,1);hover=null;pinned.clear();renderTypes();if(result){result=null;$('#res').hidden=true;showEmpty('Типы изменились — нажмите «Рассчитать укладку»')}});
+$('#types').addEventListener('click',e=>{const d=e.target.dataset.del;if(d===undefined||types.length<2)return;types.splice(+d,1);hover=null;pinned.clear();renderTypes();packRes=divRes=null;$('#dres').hidden=true;if(result){result=null;$('#res').hidden=true;showEmpty('Типы изменились — нажмите «Рассчитать укладку»')}});
 $('#add').onclick=()=>{types.push({name:'Тип '+(types.length+1),l:100,w:100,h:100,n:10,color:nextColor(),preset:'custom'});renderTypes()};
 
 /* ---------- алгоритм укладки ---------- */
@@ -214,12 +227,27 @@ function solve(items,C,budget=3500){
   return {bins,left:rest,cv,n:iters};
 }
 
+const LAY=[{name:'Без разделителей',nx:1,nz:1},{name:'Двухсекционный короткий',nx:2,nz:1},{name:'Двухсекционный длинный',nx:1,nz:2},{name:'Трёхсекционный',nx:3,nz:1},{name:'Четырёхсекционный 川 (в ряд)',nx:4,nz:1},{name:'Четырёхсекционный 田 (2×2)',nx:2,nz:2},{name:'Шестисекционный (3×2)',nx:3,nz:2}];
+function evalLayout(L,items,T,minDim,rnd){
+  const cx=(C.W-(L.nx-1)*T)/L.nx,cz=(C.D-(L.nz-1)*T)/L.nz,o={L,cx,cz,boxes:[],vol:0,cells:[],divs:[],left:[...items]};
+  if(!(cx>0&&cz>0))return null;
+  for(let iz=0;iz<L.nz;iz++)for(let ix=0;ix<L.nx;ix++){
+    const x0=ix*(cx+T),z0=iz*(cz+T),cnt={};let n=0;
+    if(o.left.length){const r=packBin(o.left,{W:cx,D:cz,H:C.H},minDim,80,rnd,40);
+      r.b.boxes.forEach(p=>{cnt[p.t]=(cnt[p.t]||0)+1;n++;o.boxes.push({...p,x:p.x+x0,z:p.z+z0})});o.vol+=r.b.vol;o.left=r.left}
+    o.cells.push({cnt,n});
+  }
+  for(let k=1;k<L.nx;k++)for(let iz=0;iz<L.nz;iz++)o.divs.push({x:k*cx+(k-1)*T,z:iz*(cz+T),dx:T,dz:cz});
+  for(let k=1;k<L.nz;k++)o.divs.push({x:0,z:k*cz+(k-1)*T,dx:C.W,dz:T});
+  return o;
+}
+
 /* ---------- расчёт ---------- */
-let result=null,cur=0,meshes=[],C=null,hover=null,transp=false,pinned=new Set();
-function calc(){
+let result=null,cur=0,meshes=[],C=null,hover=null,transp=false,pinned=new Set(),mode='pack',packRes=null,divRes=null;
+function gather(){
   $('#msg').innerHTML='';
   const L=parseFloat($('#cl').value),Wd=parseFloat($('#cw').value),H=parseFloat($('#ch').value);
-  if(!(L>0&&Wd>0&&H>0)){$('#msg').textContent='Укажите положительные размеры ящика.';return}
+  if(!(L>0&&Wd>0&&H>0)){$('#msg').textContent='Укажите положительные размеры ящика.';return null}
   C={W:L,D:Wd,H:H};const rot=$('#rot').checked;SUP=parseFloat($('#sup').value);
   const items=[],bad=[];let id=0,req=0;
   types.forEach((t,ti)=>{
@@ -230,10 +258,14 @@ function calc(){
     if(!o.length){bad.push(`«${t.name}» (${n} шт.) не помещается в ящик${rot?'':' в стоячем положении (попробуйте разрешить кантование)'}`);return}
     for(let k=0;k<n;k++)items.push({id:id++,t:ti,l:t.l,w:t.w,h:t.h,v:t.l*t.w*t.h,o});
   });
-  if(!items.length){$('#msg').innerHTML=bad.map(esc).join('<br>');$('#res').hidden=true;pinned.clear();showEmpty('Нет коробок для укладки');return}
-  const btn=$('#go');btn.disabled=true;btn.textContent='Считаю…';
-  setTimeout(()=>{try{finish(items,bad,req)}finally{btn.disabled=false;btn.textContent='Рассчитать укладку'}},30);
+  if(!items.length){$('#msg').innerHTML=bad.map(esc).join('<br>');$('#res').hidden=true;$('#dres').hidden=true;pinned.clear();packRes=divRes=null;showEmpty('Нет коробок для укладки');return null}
+  return {items,bad,req};
 }
+function busy(fn){
+  const btn=$('#go'),txt=btn.textContent;btn.disabled=true;btn.textContent='Считаю…';
+  setTimeout(()=>{try{fn()}finally{btn.disabled=false;btn.textContent=txt}},30);
+}
+function calc(){const g=gather();if(g)busy(()=>finish(g.items,g.bad,g.req))}
 function finish(items,bad,req){
   result=solve(items,C);cur=0;pinned.clear();
   const r=result,nb=r.bins.length,placed=r.bins.reduce((a,b)=>a+b.boxes.length,0),vol=r.bins.reduce((a,b)=>a+b.vol,0),fill=vol/(nb*r.cv)*100,msgs=bad.map(esc);
@@ -246,10 +278,57 @@ function finish(items,bad,req){
   $('#sum').innerHTML=`Уложено коробок: <b>${placed} из ${req}</b><br>Ящиков: <b>${nb}</b><br>${nb>1?'Среднее заполнение':'Заполнение ящика'}: <b>${fill.toFixed(1)}%</b>`;
   $('#tabs').innerHTML=nb>1?r.bins.map((b,i)=>`<button type="button" data-b="${i}" aria-pressed="false">Ящик ${i+1} · заполнен на ${(b.vol/r.cv*100).toFixed(0)}%</button>`).join(''):'';
   $('#res').hidden=false;$('#empty').hidden=true;
+  packRes={result:r,tabs:$('#tabs').innerHTML,msg:$('#msg').innerHTML,cur:0};
   showBin(0,true);
 }
 function showEmpty(t){$('#tabs').innerHTML='';$('#empty').hidden=false;$('#empty').textContent=t;$('#bar').hidden=true;clearMeshes();render()}
-$('#go').onclick=calc;
+$('#go').onclick=()=>mode==='pack'?calc():calcDiv();
+function calcDiv(){
+  const g=gather();if(!g)return;
+  const T=parseFloat($('#dt').value);if(!(T>=0)){$('#msg').textContent='Укажите толщину разделителя.';return}
+  busy(()=>{
+    let seed=777;const rnd=()=>{seed=(seed+0x6D2B79F5)|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
+    const minDim=Math.min(...g.items.map(i=>Math.min(i.l,i.w,i.h)));
+    const mixed=o=>o.cells.filter(c=>Object.keys(c.cnt).length>1).length;
+    const list=LAY.map(L=>evalLayout(L,g.items,T,minDim,rnd)).filter(Boolean)
+      .sort((a,b)=>b.boxes.length-a.boxes.length||mixed(a)-mixed(b)||b.L.nx*b.L.nz-a.L.nx*a.L.nz);
+    const msgs=g.bad.map(esc),full=o=>o.left.length===0;
+    if(!full(list[0]))msgs.push(`<b>Ни одна схема не вмещает все коробки.</b> Лучший вариант — «${list[0].L.name}»: ${list[0].boxes.length} из ${g.req}.`);
+    $('#msg').innerHTML=msgs.join('<br>');
+    divRes={list,T,req:g.req,sel:0,tabs:'',msg:$('#msg').innerHTML,cur:0};
+    $('#dl').innerHTML=list.map((o,i)=>`<button type="button" class="lay" data-d="${i}" aria-pressed="false"><b>${esc(o.L.name)}</b>${i===0&&full(o)?'<span class="rec">рекомендуется</span>':''}<small>Отсеков: ${o.L.nx*o.L.nz} (${+o.cx.toFixed(1)}×${+o.cz.toFixed(1)}) · уложено ${o.boxes.length} из ${g.req}</small></button>`).join('');
+    $('#dres').hidden=false;$('#empty').hidden=true;selD(0,true);
+  });
+}
+function selD(i,reset){
+  const o=divRes.list[i],T=divRes.T,L=o.L,f=v=>+v.toFixed(1);divRes.sel=i;
+  [...$('#dl').children].forEach((b,k)=>b.setAttribute('aria-pressed',k===i));
+  result=divRes.result={bins:[{boxes:o.boxes,vol:o.vol,divs:o.divs}],left:[],cv:C.W*C.D*C.H};
+  cur=0;$('#tabs').innerHTML='';
+  const pos=(c,n)=>Array.from({length:n-1},(_,j)=>f((j+1)*c+j*T)).join(' и ');
+  let h=`<b>Отсеков:</b> ${L.nx*L.nz}, размер ${f(o.cx)}×${f(o.cz)} мм, высота ${f(C.H)} мм.<br>`;
+  if(L.nx>1)h+=`<b>Короткие разделители</b> (поперёк, ${f(o.cz)} мм): расстояние от стенки до разделителя — ${pos(o.cx,L.nx)} мм.<br>`;
+  if(L.nz>1)h+=`<b>Длинный разделитель</b> (вдоль, ${f(C.W)} мм): расстояние от стенки — ${pos(o.cz,L.nz)} мм.<br>`;
+  if(L.nx*L.nz===1)h+='Разделители не нужны.<br>';
+  h+=o.cells.map((c,k)=>`Отсек ${k+1}: `+(Object.keys(c.cnt).map(t=>`${esc(types[t].name)} ×${c.cnt[t]}`).join(', ')||'пусто')).join('<br>');
+  if(o.left.length){const n={};o.left.forEach(x=>n[x.t]=(n[x.t]||0)+1);h+=`<br><b>Не поместилось:</b> ${Object.keys(n).map(t=>`${esc(types[t].name)} ×${n[t]}`).join(', ')}.`}
+  if(Math.abs(C.W-560)>E||Math.abs(C.D-360)>E)h+='<br><i>Положения пазов рассчитаны для внутренних размеров LM 560×360 мм; для вашего ящика сверьте их с пазами.</i>';
+  $('#dd').innerHTML=h;showBin(0,reset);
+}
+$('#dl').addEventListener('click',e=>{const b=e.target.closest('[data-d]');if(b)selD(+b.dataset.d,false)});
+function setMode(m){
+  if(m===mode)return;
+  const old=mode==='pack'?packRes:divRes;if(old){old.cur=cur;old.msg=$('#msg').innerHTML}
+  mode=m;pinned.clear();
+  $('#mp').setAttribute('aria-pressed',m==='pack');$('#md').setAttribute('aria-pressed',m==='div');
+  const st=m==='pack'?packRes:divRes;
+  $('#res').hidden=!(m==='pack'&&packRes);$('#dres').hidden=!(m==='div'&&divRes);$('#dopts').hidden=m!=='div';
+  $('#go').textContent=m==='pack'?'Рассчитать укладку':'Подобрать разделители';
+  $('#msg').innerHTML=st?st.msg:'';
+  if(st){result=st.result;$('#tabs').innerHTML=st.tabs;$('#empty').hidden=true;showBin(st.cur,true)}
+  else showEmpty(m==='pack'?'Нажмите «Рассчитать укладку»':'Нажмите «Подобрать разделители»');
+}
+$('#mp').onclick=()=>setMode('pack');$('#md').onclick=()=>setMode('div');
 $('#tabs').addEventListener('click',e=>{const b=e.target.dataset.b;if(b!==undefined)showBin(+b,false)});
 
 /* ---------- 3D ---------- */
@@ -293,6 +372,11 @@ function showBin(i,resetCam){
     m.position.set(p.x+p.dx/2-W/2,p.y+p.dy/2,p.z+p.dz/2-D/2);m.userData.t=p.t;
     const e=new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry),new THREE.LineBasicMaterial({color:0x000000,transparent:true,opacity:0.5}));
     m.add(e);grp.add(m);meshes.push(m);
+  });
+  (b.divs||[]).forEach(d=>{
+    const m=new THREE.Mesh(new THREE.BoxGeometry(d.dx,H,d.dz),new THREE.MeshLambertMaterial({color:0x7a8696,transparent:true,opacity:0.85}));
+    m.position.set(d.x+d.dx/2-W/2,H/2,d.z+d.dz/2-D/2);
+    m.add(new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry),new THREE.LineBasicMaterial({color:0x000000,transparent:true,opacity:0.4})));grp.add(m);
   });
   const st=$('#step');st.max=order.length;st.value=order.length;$('#bar').hidden=false;
   updateStep();
